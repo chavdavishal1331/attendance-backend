@@ -4,7 +4,6 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const mongoose = require("mongoose");
-const dns = require("dns");
 require("dotenv").config();
 
 const User = require("./models/User");
@@ -12,27 +11,22 @@ const Attendance = require("./models/Attendance");
 
 const app = express();
 
+// ================= MIDDLEWARE =================
 app.use(cors());
 app.use(express.json());
 
-// DNS FIX
-dns.setServers(["8.8.8.8", "8.8.4.4"]);
+// ================= UPLOAD FOLDER FIX =================
+const uploadPath = path.join(__dirname, "uploads");
 
-// ================= MONGODB (ENV SECURE) =================
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Atlas Connected ✅"))
-  .catch((err) => console.log("Mongo Error:", err));
-
-// ================= UPLOAD =================
-if (!fs.existsSync("uploads")) {
-  fs.mkdirSync("uploads");
+if (!fs.existsSync(uploadPath)) {
+  fs.mkdirSync(uploadPath);
 }
 
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(uploadPath));
 
+// ================= MULTER =================
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
+  destination: (req, file, cb) => cb(null, uploadPath),
   filename: (req, file, cb) =>
     cb(null, Date.now() + path.extname(file.originalname)),
 });
@@ -112,7 +106,7 @@ app.get("/api/attendance/check/:userId/:date", async (req, res) => {
   }
 });
 
-// ================= ATTENDANCE ADD (0 / 1 FIX) =================
+// ADD ATTENDANCE
 app.post("/api/attendance/add", async (req, res) => {
   try {
     const { userId, name, date, time } = req.body;
@@ -127,7 +121,7 @@ app.post("/api/attendance/add", async (req, res) => {
       return res.json({ message: "already" });
     }
 
-    // ⏰ TIME LOGIC (4:30 PM - 6:00 PM)
+    // TIME LOGIC (4:30 PM - 6:00 PM)
     const now = new Date();
     const minutes = now.getHours() * 60 + now.getMinutes();
 
@@ -153,7 +147,7 @@ app.post("/api/attendance/add", async (req, res) => {
   }
 });
 
-// DELETE
+// DELETE ATTENDANCE
 app.delete("/api/attendance/:id", async (req, res) => {
   try {
     await Attendance.findByIdAndDelete(req.params.id);
@@ -163,10 +157,19 @@ app.delete("/api/attendance/:id", async (req, res) => {
   }
 });
 
-// ================= SERVER START =================
-const PORT = process.env.PORT || 5000;
+// ================= MONGODB + SERVER START =================
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log("MongoDB Atlas Connected ✅");
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("Server running on:");
-  console.log(`👉 Local: http://localhost:${PORT}`);
-});
+    const PORT = process.env.PORT || 5000;
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`🚀 Server running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("MongoDB Connection Failed ❌", err);
+    process.exit(1);
+  });
