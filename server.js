@@ -4,6 +4,7 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const mongoose = require("mongoose");
+const dns = require("dns");
 require("dotenv").config();
 
 const User = require("./models/User");
@@ -11,11 +12,19 @@ const Attendance = require("./models/Attendance");
 
 const app = express();
 
+// ================= DNS FIX (IMPORTANT) =================
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
+
 // ================= MIDDLEWARE =================
 app.use(cors());
 app.use(express.json());
 
-// ================= UPLOAD FOLDER FIX =================
+// ================= ROOT TEST =================
+app.get("/", (req, res) => {
+  res.send("Server is running ✅");
+});
+
+// ================= UPLOAD FOLDER =================
 const uploadPath = path.join(__dirname, "uploads");
 
 if (!fs.existsSync(uploadPath)) {
@@ -41,6 +50,7 @@ app.get("/api/users", async (req, res) => {
     const users = await User.find().sort({ id: 1 });
     res.json(users);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Fetch error" });
   }
 });
@@ -97,9 +107,7 @@ app.get("/api/attendance", async (req, res) => {
 app.get("/api/attendance/check/:userId/:date", async (req, res) => {
   try {
     const { userId, date } = req.params;
-
     const record = await Attendance.findOne({ userId, date });
-
     res.json({ exists: !!record });
   } catch (err) {
     res.status(500).json({ error: "Check error" });
@@ -121,7 +129,7 @@ app.post("/api/attendance/add", async (req, res) => {
       return res.json({ message: "already" });
     }
 
-    // TIME LOGIC (4:30 PM - 6:00 PM)
+    // TIME LOGIC
     const now = new Date();
     const minutes = now.getHours() * 60 + now.getMinutes();
 
@@ -147,7 +155,7 @@ app.post("/api/attendance/add", async (req, res) => {
   }
 });
 
-// DELETE ATTENDANCE
+// DELETE
 app.delete("/api/attendance/:id", async (req, res) => {
   try {
     await Attendance.findByIdAndDelete(req.params.id);
@@ -157,16 +165,18 @@ app.delete("/api/attendance/:id", async (req, res) => {
   }
 });
 
-// ================= MONGODB + SERVER START =================
+// ================= MONGODB CONNECT =================
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI, {
+    serverSelectionTimeoutMS: 5000,
+  })
   .then(() => {
     console.log("MongoDB Atlas Connected ✅");
 
     const PORT = process.env.PORT || 5000;
 
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
+      console.log(`🚀 Server running on port ${PORT}`);
     });
   })
   .catch((err) => {
